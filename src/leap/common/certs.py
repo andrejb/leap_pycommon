@@ -186,9 +186,22 @@ def get_compatible_ssl_context_factory(cert_path=None):
     if twisted.version.base() > '14.0.1':
         from twisted.web.client import BrowserLikePolicyForHTTPS
         from twisted.internet import ssl
+        from OpenSSL.SSL import TLSv1_2_METHOD
         if cert_path:
             cert = ssl.Certificate.loadPEM(open(cert_path).read())
-        policy = BrowserLikePolicyForHTTPS(cert)
+
+        # currently, the Leap platform runs on wheezy which has versions of
+        # openssl and python with poor options for SSL/TLS version, so we
+        # enforce TLSv1.2 on the client
+        class TLSv12PolicyForHTTPS(BrowserLikePolicyForHTTPS):
+            @ssl._requireSSL
+            def creatorForNetLoc(self, hostname, port):
+                return ssl.optionsForClientTLS(
+                    hostname.decode("ascii"),
+                    trustRoot=self._trustRoot,
+                    extraCertificateOptions={'method': TLSv1_2_METHOD})
+
+        policy = TLSv12PolicyForHTTPS(cert)
         return policy
     else:
         raise Exception(("""
